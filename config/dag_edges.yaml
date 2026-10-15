@@ -1,0 +1,71 @@
+# Ground-truth DAG, derived from the implemented structural equations: each
+# edge below is "parent appears in the structural equation of child", and no
+# edge exists for any other reason.
+#
+# 22 nodes, 27 edges (Fig. 1 of the paper). [paper] marks an edge stated
+# explicitly in the paper's text or equations.
+
+edges:
+  # sinr_eff = snr + xi_sf - beta_L*L - dop_pen(dop) - ds_pen(ds) + eps1   (eq. (1))
+  - [snr, sinr_eff]                 # [paper]
+  - [shadow_fading, sinr_eff]       # [paper] effect modifier (Fig. 1, dashed)
+  - [cell_load, sinr_eff]           # [paper] backdoor edge (inter-cell interference)
+  - [doppler, sinr_eff]             # [paper]
+  - [delay_spread, sinr_eff]        # [paper]
+  - [eps_sinr, sinr_eff]            # [paper]
+
+  # mcs_idx = highest MCS with BLER(sinr_eff, mcs) <= target
+  - [sinr_eff, mcs_idx]
+
+  # mod_order, code_rate = MCS table lookups
+  - [mcs_idx, mod_order]
+  - [mcs_idx, code_rate]
+
+  # bler = BLER(sinr_eff, mcs_idx)   (Sionna forward pass / analytical)
+  - [sinr_eff, bler]
+  - [mcs_idx, bler]
+
+  # se_phy = mod_order * code_rate   (nominal spectral efficiency of the
+  # selected MCS; bler is not a parent, decoding failure enters once, in pkt_loss)
+  - [mod_order, se_phy]
+  - [code_rate, se_phy]
+
+  # num_prb = floor(100*(1 - alpha_L*L)) + epsT   (eq. (2))
+  - [cell_load, num_prb]            # [paper] backdoor edge (the confounding edge)
+  - [eps_sched, num_prb]            # [paper]
+
+  # harq_retx = sum_{k=1..K} bler^k   (eq. (3))
+  - [bler, harq_retx]
+
+  # mac_tput = C0 * num_prb * se_phy*(1 + kappa_hw*xi_hw) / (1 + kappa_harq*harq_retx)
+  # Service rate after retransmission overhead: a retransmission costs airtime
+  # whether or not it succeeds (harq_retx term); bler is not a parent, whether
+  # a served block decodes is settled in pkt_loss.
+  - [num_prb, mac_tput]             # [paper] treatment -> outcome path
+  - [se_phy, mac_tput]
+  - [hw_impairment, mac_tput]       # [paper] effect modifier (se_eff term)
+  - [harq_retx, mac_tput]
+
+  # queue_dep = [ rho^2*xi_tb/(2(1-rho)) + eps3 ]_+,  rho = min(lambda/mac_tput, rho_max)   (eq. (4))
+  # lambda (network.arrival_mbps) is a fixed constant, not a node; xi_tb = C_a^2
+  # enters once, in the numerator.
+  - [mac_tput, queue_dep]           # [paper]
+  - [traffic_burst, queue_dep]      # [paper] effect modifier (arrival variability C_a^2)
+  - [eps_queue, queue_dep]          # [paper]
+
+  # pkt_loss = 1 - (1 - bler^(1+K)) * exp(-max(0, queue_dep - q_thr)/q_scale)   (eq. (5))
+  # mac_tput is not a parent: goodput = mac_tput * (1 - pkt_loss) already
+  # carries the service limit. harq_retx is not a parent: the residual decoding
+  # failure after 1+K independent attempts is bler^(1+K), a function of bler
+  # and the fixed limit K only.
+  - [queue_dep, pkt_loss]
+  - [bler, pkt_loss]
+
+  # goodput = mac_tput * (1 - pkt_loss)
+  - [mac_tput, goodput]             # [paper]
+  - [pkt_loss, goodput]             # [paper]
+
+# 27 edges. Structures the paper relies on:
+#   backdoor path: cell_load -> num_prb  and  cell_load -> sinr_eff ~~> goodput
+#   effect modifiers with no edge into num_prb: shadow_fading, hw_impairment,
+#   traffic_burst

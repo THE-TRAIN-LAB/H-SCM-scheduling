@@ -1,0 +1,102 @@
+# Simulator parameters (paper Sec. II-A and IV, Table I). Values marked
+# "assumed" are not fixed by the paper.
+
+phy:
+  # -- Sionna link (Sec. II-A, Table I) --
+  ldpc_info_bits: 512
+  fft_size: 76              # subcarriers
+  subcarrier_spacing: 15.0e3
+  num_ofdm_symbols: 14
+  channel_model: CDL-C
+  batch_size: 32
+  carrier_frequency: 2.6e9
+  cdl_delay_spread: 100.0e-9  # fixed CDL parameter; the per-UE delay spread enters eq. (1) through Delta_tau
+  ue_speed_mps: 3.0
+  pilot_pattern: kronecker  # assumed
+  pilot_ofdm_symbol_indices: [2, 11]  # assumed
+  cyclic_prefix_length: 6   # assumed
+  # -- backend selection --
+  backend: sionna           # sionna | analytical (both implement PHYBackend)
+  target_bler: 0.1          # MCS selection rule (Table I)
+  analytical:               # AWGN logistic approximation (unit tests)
+    gap_db: 3.0             # Shannon gap: thr = 10log10(2^se - 1) + gap_db
+    slope_db: 1.0           # logistic waterfall slope
+
+# sinr_eff convention: Es/N0 per resource element at the receiver input, in
+# dB. The Sionna conversion is exact: unit-energy QAM + normalize_channel=True
+# => no = 10^(-sinr_eff/10). See simulator/phy.py.
+
+mcs_table:                  # [mod_order m, code_rate r]; 12 MCSs (Table I)
+  - [2, 0.30]
+  - [2, 0.44]
+  - [2, 0.59]
+  - [4, 0.37]
+  - [4, 0.48]
+  - [4, 0.60]
+  - [4, 0.74]
+  - [6, 0.55]
+  - [6, 0.65]
+  - [6, 0.75]
+  - [6, 0.85]
+  - [6, 0.93]
+
+sinr:                       # eq. (1)
+  beta_L: 18.0              # dB per unit load (Table I)
+  doppler_penalty: {a: 0.5, f0: 100.0}    # Delta_D = a*log2(1 + f_D/f0) dB (assumed)
+  delay_penalty:   {a: 0.4, d0: 100.0}    # Delta_tau = a*log2(1 + tau_rms/d0) dB (assumed)
+
+mac:
+  base_prb: 100             # N_PRB (Table I)
+  alpha_L: 0.58             # Table I
+  harq_max_rounds: 3        # K_H (Table I)
+  kappa_harq: 0.15          # airtime overhead per expected retransmission (assumed)
+  kappa_hw: 0.05            # device-impairment slope of se_eff (assumed)
+  tput_scale_mbps_per_prb_se: 0.21   # C0, Mbps per PRB per bit/s/Hz (assumed)
+  tput_floor_mbps: 0.5      # minimum bearer rate; bounds the queue tail (assumed)
+
+network:
+  arrival_mbps: 5.5         # lambda, fixed offered traffic (Table I); not an SCM node
+  rho_max: 0.95             # utilization cap in eq. (4) (Table I)
+  q_thr: 5.0                # q_th in eq. (5) (Table I)
+  q_scale: 10.0             # eq. (5) (Table I)
+
+observational:              # paper Sec. IV
+  n_samples: 500
+  snr_db: {dist: uniform, low: 2.0, high: 28.0}
+  cell_load: {dist: beta, a: 2.0, b: 2.0}
+  shadow_fading_db: {dist: normal, mean: 0.0, var: 49.0}
+  hw_impairment: {dist: normal, mean: 0.0, var: 2.25}
+  traffic_burst: {dist: lognormal, mu: 0.0, sigma2: 0.12}
+  doppler_hz: {dist: uniform, low: 5.0, high: 200.0}        # assumed
+  delay_spread_ns: {dist: uniform, low: 30.0, high: 300.0}  # assumed
+  eps_sinr: {dist: normal, mean: 0.0, var: 0.25}            # assumed
+  eps_sched_prb: {dist: normal_rounded, mean: 0.0, var: 10.5}  # assumed; gives r(L, num_prb) ~ -0.97
+  eps_queue: {dist: normal, mean: 0.0, var: 0.01}           # assumed
+
+interventional:                 # the 19 base do() regimes of discovery (step11)
+  regimes:
+    # 9: do(prb) x do(L) grid
+    - {do: {num_prb: 10,  cell_load: 0.1}}
+    - {do: {num_prb: 10,  cell_load: 0.5}}
+    - {do: {num_prb: 10,  cell_load: 0.9}}
+    - {do: {num_prb: 50,  cell_load: 0.1}}
+    - {do: {num_prb: 50,  cell_load: 0.5}}
+    - {do: {num_prb: 50,  cell_load: 0.9}}
+    - {do: {num_prb: 100, cell_load: 0.1}}
+    - {do: {num_prb: 100, cell_load: 0.5}}
+    - {do: {num_prb: 100, cell_load: 0.9}}
+    # 3: do(prb) alone (marginal over L)
+    - {do: {num_prb: 10}}
+    - {do: {num_prb: 50}}
+    - {do: {num_prb: 100}}
+    # 2: forced MCS extremes (identify mcs -> downstream edges)
+    - {do: {mcs_idx: 0}}
+    - {do: {mcs_idx: 11}}
+    # 1: forced HARQ off (contrast vs observational, where harq_retx varies 0-3)
+    - {do: {harq_retx: 0}}
+    # 2: SNR extremes
+    - {do: {snr: 4.0}}
+    - {do: {snr: 26.0}}
+    # 2: shadow-fading extremes (+-2 sigma)
+    - {do: {shadow_fading: -14.0}}
+    - {do: {shadow_fading: 14.0}}

@@ -1,0 +1,16 @@
+# Direct dependencies, pinned to the versions the results were produced with
+# (Python 3.11, macOS arm64, CPU).
+numpy==2.4.6
+scipy==1.16.3
+pandas==3.0.3
+scikit-learn==1.9.0
+statsmodels==0.14.6
+networkx==3.6.1
+PyYAML==6.0.3
+matplotlib==3.11.0
+torch==2.14.1
+tensorflow==2.21.0
+sionna==1.2.2
+causal-learn==0.1.4.8
+lingam==1.12.2
+pytest==9.1.1
